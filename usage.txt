@@ -1,0 +1,17 @@
+
+Usage: locate [options] [search]
+
+Options:
+    --help, -h		This help
+    --dirs, -d		Only in folder names
+    --files, -f		Only in file names
+    --quiet, -q, /q	Quiet mode
+    --info, -i		Some statistics
+    --history		errr... history of commands
+    --vacuum		Vacuum database
+    --debug		[TODO] Debug information
+    --setup		[TODO] Initial setup
+
+Search:
+    Any word[s] longer than 2 chars, e.g.: Ala bala portokala.
+    Use minus sign to exclude words, e.g. -word will display only results, which does not contain "word".

@@ -1,57 +1,27 @@
 import os, sys, sqlite3, time, ctypes, atexit, errno
-
-
-class ArgsParse:
-    """Parse args.
-
-    Write some docs, pls ;)
-    """
-
-    def listpad(self, _lst, _len, _dflt = False):
-        return _lst + (_dflt,) * (_len - len(_lst))
-
-    def typecast(self, _var, _type):
-        return getattr(__builtins__, _type)(_var)
-
-    def parse(self, args, expected):
-        # expected = [(name, aliases, expect),...]
-        _args = args.split()[1:] if isinstance(args, basestring) else args[1:]
-        _opts = {}
-        _unkn = []
-
-        #zerofill
-        for i, ex in enumerate(expected):
-            if isinstance(ex, basestring):
-                ex = (ex,)
-            expected[i] = self.listpad(ex, 4)
-            _opts[ex[0]] = False
-
-        while len(_args):
-            arg = _args.pop(0)
-            flg = False
-            for name, aliases, expect, default in expected:
-                aliases = aliases.replace(';',' ').replace(',',' ').split() if aliases != False else []
-                aliases.append('--'+name)
-                if arg in aliases:
-                    flg = True
-                    if False == expect:
-                        _opts[name] = True
-                    else:
-                        try:
-                            if '-' == _args[0][0:1]:
-                                raise IndexError
-                            _opts[name] = self.typecast(_args.pop(0), expect)
-                        except IndexError:
-                            _opts[name] = default
-            if not flg:
-                _unkn.append(arg)
-        return _opts, _unkn
-# End of class ArgsParse
+#from locatefiles.ArgsParse import ArgsParse
+from locatefiles import *
 
 
 # ####################################################
 # Functions
 # ####################################################
+
+def insertInDB():
+    #L = list(set(L))
+    L.sort()
+    for i, f in enumerate(L):
+        L[i] = (path,f)
+
+    if len(L) > 0:
+        cur.executemany("insert into idx (path, loc) values (?, ?)", L)
+        conn.commit()
+
+def usage():
+    with open (options['path'] + "usage.txt", "r") as usage:
+        data=usage.read()
+    print(data)
+
 
 def sizeof_fmt(num):
     num = int(num)
@@ -82,7 +52,7 @@ def errExit(st):
     highlightStr('Error: %s' % st, 'error:', highlight_error)
     sys.exit(1)
 
-def status(st, mode = 0):
+def status(st = '', mode = 0):
     """
     mode:
         0 - normal
@@ -165,6 +135,7 @@ def getDrives():
             drives.append(drive)
     return drives
 
+"""
 SHERB_NOCONFIRMATION = 1
 SHERB_NOPROGRESSUI   = 2
 SHERB_NOSOUND        = 4
@@ -172,6 +143,8 @@ SHERB_NOSOUND        = 4
 def EmptyRecycleBin(options=SHERB_NOCONFIRMATION or SHERB_NOPROGRESSUI or SHERB_NOSOUND):
     from ctypes import windll
     windll.shell32.SHEmptyRecycleBinA(None, None, options)
+"""
+
 
 def disk_usage(path):
     _, total, free = ctypes.c_ulonglong(), ctypes.c_ulonglong(), ctypes.c_ulonglong()
@@ -185,16 +158,6 @@ def disk_usage(path):
     used = total.value - free.value
     return "%d %d %d" % (total.value, used, free.value)
     #return (total.value, used, free.value)
-
-def insertInDB():
-    #L = list(set(L))
-    L.sort()
-    for i, f in enumerate(L):
-        L[i] = (path,f)
-
-    if len(L) > 0:
-        cur.executemany("insert into idx (path, loc) values (?, ?)", L)
-        conn.commit()
 
 
 # ####################################################
@@ -233,7 +196,8 @@ SLASH = os.sep
 atexit.register(goodbye)
 
 options = {}
-options['db'] = os.path.dirname(os.path.realpath(__file__)) + SLASH + DATABASE
+options['path'] = os.path.dirname(os.path.realpath(__file__)) + SLASH
+options['db'] = options['path'] + DATABASE
 
 conn = sqlite3.connect(options['db'])
 cur = conn.cursor()
@@ -258,12 +222,13 @@ with open(options['lockfile'], 'w') as f:
 
 args = sys.argv
 
-if len(args) < 1:
-    print("Usage: ...")
+if len(args) < 2:
+    usage()
     sys.exit(1)
 
 expected = [
     ('update', '-u /u', 'str', 'AUTO'),
+    ('help', '-h /?'),
     ('dirs', '-d'),
     ('files', '-f'),
     ('quiet', '-q /q'),
@@ -274,8 +239,13 @@ expected = [
     'setup'
 ]
 
-ap = ArgsParse()
-opts, search = ap.parse(args, expected)
+opts, search, errs = ArgsParse.ArgsParse().parse(args, expected)
+
+
+if len(errs):
+    for e in errs:
+        highlightStr('Error: %s' % e, 'error:', highlight_error)
+    sys.exit(1)
 
 for k, v in opts.items():
     #if k in options:
@@ -290,10 +260,17 @@ sys.exit(0)
 
 
 # ####################################################
+# H E L P
+# ####################################################
+
+if options['help']:
+    usage()
+
+# ####################################################
 # U P D A T E
 # ####################################################
 
-if options['update']:
+elif options['update']:
 
     DRIVES = getDrives()
 
@@ -404,11 +381,11 @@ elif options['setup']:
 # ####################################################
 
 elif options['vacuum']:
+    status('Vacuum started...')
     ts = time.time()
     cur.execute("VACUUM")
-    if not options['quiet']:
-        elapsed = round(time.time() - ts, 4)
-        print '\nVacuum completed in %.4f seconds.\n' % elapsed
+    elapsed = round(time.time() - ts, 4)
+    status('\nVacuum completed in %.4f seconds.\n' % elapsed)
 
 # ####################################################
 # I N F O
@@ -476,8 +453,7 @@ else:
 
 
     if len(params) < 1 or len(conds) < 1:
-        print "Error: Nothing to search"
-        sys.exit()
+        errExit('Nothing to search')
 
     query = query + ' AND '.join(conds) + ' ORDER BY loc'
 
@@ -487,8 +463,7 @@ else:
         print params
         print
 
-    if not options['quiet']:
-        print
+    status()
 
     results = []
     cnt = 0
@@ -516,6 +491,9 @@ else:
 
     elapsed = round(time.time() - ts, 4)
 
+    if cnt <= options['max_results']:
+        status('\n%d items found in %.4f seconds.\n' % (cnt, elapsed))
+
     cur.execute(
         """
         INSERT INTO hist (start, elapsed, action, params)
@@ -525,8 +503,6 @@ else:
     )
     conn.commit()
 
-    if not options['quiet'] and not cnt > options['max_results']:
-        print '\n%d items found in %.4f seconds.\n' % (cnt, elapsed)
 
 # ####################################################
 # E X I T
