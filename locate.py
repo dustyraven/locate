@@ -193,7 +193,6 @@ SLASH = os.sep
 # P R E P A R E
 # ####################################################
 
-atexit.register(goodbye)
 
 options = {}
 options['path'] = os.path.dirname(os.path.realpath(__file__)) + SLASH
@@ -210,8 +209,18 @@ for k, v in cur.execute("select key, val from cfg"):
 if not options['lockfile']:
     options['lockfile'] = options['db'] + '.lock'
 
+if os.path.isfile(options['lockfile']):
+    status('Another instance running!')
+    sys.exit(0)
+
 with open(options['lockfile'], 'w') as f:
     f.write('%f' % time.time())
+
+DRIVES = getDrives()
+
+DRIVES_COND = " path IN ('%s') " % ("','".join( map( str, DRIVES ) ))
+
+atexit.register(goodbye)
 
 #print options
 #sys.exit()
@@ -272,12 +281,12 @@ if options['help']:
 
 elif options['update']:
 
-    DRIVES = getDrives()
 
     if "ALL" != options['update']:
         if 'AUTO' == options['update'].upper():
             if options['autoupdate'] is not False:
-                cur.execute("SELECT path FROM paths ORDER BY indexed ASC LIMIT 1")
+                query = "SELECT path FROM paths WHERE %s ORDER BY indexed ASC LIMIT 1" % DRIVES_COND
+                cur.execute(query)
                 options['update'] = cur.fetchone()[0]
             else:
                 errExit('Autoupdate disabled.')
@@ -397,7 +406,7 @@ elif options['info']:
     data = []
     print
 
-    for row in cur.execute("select path, count(path) from idx group by path"):
+    for row in cur.execute("SELECT path, COUNT(path) FROM idx WHERE %s GROUP BY path" % DRIVES_COND):
         data.append(row)
 
     for row in data:
@@ -435,7 +444,7 @@ elif options['info']:
 else:
     ts = time.time()
 
-    query = 'SELECT loc FROM idx WHERE '
+    query = "SELECT loc FROM idx WHERE %s AND " % DRIVES_COND
 
     params = []
     conds  = []
