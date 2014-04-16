@@ -477,8 +477,11 @@ else:
     results = []
     cnt = 0
     for row in cur.execute(query, params):
+        result = row[0]
+        if not os.path.exists(result):
+            continue
         try:
-            result = row[0] #repr(row[0]).decode('ascii')
+            #result = repr(result).decode('ascii')
             if options['quiet']:
                 print result
             else:
