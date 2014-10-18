@@ -209,7 +209,7 @@ for k, v in cur.execute("select key, val from cfg"):
 if not options['lockfile']:
     options['lockfile'] = options['db'] + '.lock'
 
-if os.path.isfile(options['lockfile']):
+if os.path.isfile(options['lockfile']) and time.time() - 3600 < os.path.getmtime(options['lockfile']):
     status('Another instance running!')
     sys.exit(0)
 
@@ -491,6 +491,7 @@ else:
                 print options['cutstr']
             else:
                 highlightStr(options['cutstr'], options['cutstr'], highlight_error)
+                # print u"%s" % result.encode('utf-8')
         except Exception, e:
             print "\n\n\nERROR: %s\n\n\n" % str(e)
 
